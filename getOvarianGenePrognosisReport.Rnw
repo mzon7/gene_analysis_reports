@@ -1,0 +1,513 @@
+\documentclass{article}
+
+\usepackage{changepage}
+\usepackage{tabularx}
+\usepackage{environ}
+\usepackage[vmargin=1in,hmargin=1in]{geometry}
+
+\newenvironment{widestuff}{\begin{adjustwidth}{-4.5cm}{-4.5cm}\centering}{\end{adjustwidth}}
+\usepackage{hyperref}
+\usepackage{longtable}
+\setlength{\LTleft}{0pt}
+\usepackage[ 
+    singlelinecheck=false,
+    justification=centering
+]{caption}
+\hypersetup{
+    colorlinks,
+    citecolor=black,
+    filecolor=black,
+    linkcolor=black,
+    urlcolor=black
+}
+
+\begin{document}
+
+\setlength\LTleft{0pt}
+\setlength\LTright{0pt}
+
+
+<<setup, include=FALSE, cache=FALSE>>=
+#\SweaveOpts{concordance=TRUE} was after begn doc
+# Set options
+#rm(list=ls())
+@
+
+<<,fig=TRUE,echo=FALSE, warning=FALSE, results='asis', error=FALSE, message=FALSE, fig.keep='all', fig.show='asis', fig.keep='all'>>=
+#,fig=TRUE,echo=FALSE, warning=FALSE, results='hide', error=FALSE, message=FALSE
+#removed results='as-is'
+
+#Note during paul signature for ovOs, data PMID19318476 subtype MES has 5 patients with 
+#score =-0.70585964  0.06905259 -1.03268226  1.09095439  0.18141053
+#DataTimeToDeath = 0.90349076 2.71047228 0.08213552 0.98562628 0.32854209
+#and dataVitalStat = 1 1 1 0 0
+#this gives the following error in the D.index function and causes the dInd, dindHigh and dinLow to be NA in MES below
+#Error in fitter(X, Y, strats, offset, init, control, weights = weights,  : 
+#  (converted from warning) Ran out of iterations and did not converge
+#should look into this, but likely that math works out this way at a low sample size
+
+#Note, X genes with constant expression throughout the samples is a complaint returned by the subtyping functions
+
+#Sys.setenv(JAVA_HOME='C:\\Users\\micha\\Documents\\jre1.8.0_111') for rJava problems
+#change true or false neel and cancer type and and cancer type string prior to running
+mord = FALSE
+neel = "paul"
+cancerType = "ovarian"
+
+if(cancerType == "breast")
+  titleString = "Prognostic Value of Genes in Breast Cancer"
+if(cancerType == "ovarian")
+  titleString = "Prognostic Value of Genes in Ovarian Cancer"
+
+cat(paste("\\title{", titleString, "}"))
+cat("\\maketitle")
+
+brAll = FALSE
+brMet = FALSE
+brMost = FALSE
+brTcga = FALSE
+
+ovOs = TRUE
+ovRec = FALSE
+
+if(cancerType == "breast")
+{
+  subtypeStr = "SCMOD2"
+  if(brAll == TRUE)
+  {
+    cancerType = "brAll"
+    dataStr = "Relapse free survival"
+  }
+  if(brMet == TRUE)
+  {
+    cancerType = "brMet"
+    dataStr = "Overall survival"
+  }
+  if(brMost == TRUE)
+  {
+    cancerType = "brMost"
+    dataStr = "Relapse free survival"
+  }
+  if(brTcga == TRUE)
+  {
+    cancerType = "brTcga"
+    dataStr = "Overall survival"
+  }
+}
+
+if(cancerType == "ovarian")
+{
+  subtypeStr = "Verhaak"
+
+  if(ovOs == TRUE)
+  {
+    cancerType = "ovOs"
+    dataStr = "Overall survival"
+
+  }
+  if(ovRec == TRUE)
+  {
+    cancerType = "ovRec"
+    dataStr = "Relapse free survival"
+  }
+}
+
+cat("\\tableofcontents")
+
+if(mord == FALSE)
+  setwd("C:\\Users\\micha\\Documents\\PMH Research\\Yale Alberto Meta Analysis\\ProjectTest\\Sweave Project\\R Code")
+#setwd("C:\\Users\\Michael\\Documents\\PMH Research\\Yale Alberto Meta Analysis\\ProjectTest\\Sweave Project\\R Code")
+#if(neel == FALSE)
+#  source("getGeneProgReportCode.R")  
+
+#if(neel == TRUE)
+  source("getGeneProgReportCodeGen.R") 
+
+#geneInfoLists = getSigResults(cancerType, neel)
+
+geneInfoList = geneInfoLists[[1]]
+
+symbPathList = geneInfoLists[[2]]
+
+geneFileInfo = geneInfoLists[[3]]
+geneEntrezList = geneFileInfo[[1]]
+geneNameList = geneFileInfo[[2]]
+geneDescripList = geneFileInfo[[3]]
+
+statTableList = geneInfoLists[[4]]
+summaryTabList = geneInfoLists[[5]]
+
+geneShift = 19
+indexInfo = geneInfoLists[[6]]
+numExtras = indexInfo[[1]] 
+infoPerSubtype = indexInfo[[2]] 
+numSubtypes = indexInfo[[3]] 
+subtypes = as.character(indexInfo[[4]])
+geneShift = numExtras + infoPerSubtype*(numSubtypes + 1)
+
+cat("\\newpage")
+cat("\\clearpage")
+
+geneSigInfoList = geneInfoLists[[7]]
+geneSigFrame = geneInfoLists[[8]]
+forestPlotFrame = geneInfoLists[[9]]
+
+graphics.off()
+
+cat("\\section{Anlysis Information}") 
+
+cat("\\subsection{Data Information}")
+dataTabInfo = geneInfoLists[[10]]
+dataTab = dataTabInfo[[1]]
+
+plat = dataTab$platform
+numUnknown = which(plat == "Unknown")
+if(length(numUnknown) == dim(dataTab)[1])
+{
+   dataTab = dataTab[, -which(colnames(dataTab)=="platform")]
+  print(xtable::xtable(dataTab, align=c("p{2.5cm}","p{2.5cm}","p{2cm}","p{1.5cm}","p{2cm}","p{2cm}")), include.rownames = FALSE) 
+}
+if(length(numUnknown) < dim(dataTab)[1])
+{
+  print(xtable::xtable(dataTab, align=c("p{2.5cm}","p{2.5cm}","p{2cm}","p{1.5cm}","p{2cm}","p{2cm}","p{5cm}")), include.rownames = FALSE) 
+}
+
+cat("\\subsection{Parameter Information}")
+censorStr = "10 years"
+splitStr = "median expression levels of patients"
+combEstStr = "Random effect model"
+
+cat("\\begin{itemize}")
+cat("\\item{", dataStr," data used in the survival analysis}") 
+cat("\\item{Data censored at ",censorStr,"}") 
+cat("\\item{Survival curve groups determined via ",splitStr,"}")
+cat("\\item{", combEstStr," used when combining estimators (D index)}") 
+cat("\\item{", subtypeStr,"molecular subtyping scheme used}") 
+cat("\\end{itemize}")
+
+cat("\\subsection{R Session Info}")
+toLatex(sessionInfo(), locale=FALSE)
+
+cat("\\clearpage") 
+
+if(dim(geneSigFrame)[1] > 0)
+{
+  if(mord == FALSE)
+    setwd("C://Users//micha//Documents//PMH Research//Yale Alberto Meta Analysis//ProjectTest//Sweave Project")
+  #setwd("C://Users//Michael//Documents//PMH Research//Yale Alberto Meta Analysis//ProjectTest//Sweave Project")
+  cat("\\section{Gene Signature Prognostics}") 
+  cat("\\subsection{Gene Signature Info}")
+
+  geneNotPresVec = c()
+  for(i in 1:length(statTableList))
+  {
+    if(length(statTableList[[i]]) == 0)
+      geneNotPresVec = c(geneNotPresVec, i)
+  }
+  
+  tableCap = "Information Pertaining to the Genes in the Signature"
+  printSigFrame = cbind(geneSigFrame[,4], geneSigFrame[,3])
+  if(length(geneNotPresVec) > 0)
+    printSigFrame = cbind(geneSigFrame[-geneNotPresVec,4], geneSigFrame[-geneNotPresVec,3])
+  
+  colnames(printSigFrame) = c("Gene Name", "Gene Symbol")
+  tableTemp = xtable::xtable(printSigFrame, digits = 5, caption = tableCap, align=c("l","l","p{5cm}"))
+  #cat("\\newenvironment{widestuff}{\\begin{adjustwidth}{-4.5cm}{-4.5cm}\\centering}{\\end{adjustwidth}}")
+  #cat("\\makebox[\\textwidth]{")
+  #cat("\\setlength\\LTleft\\parindent")
+  #cat("\\setlength\\LTright\\fill")
+
+  #cat("\\begin{longtable}[l]")
+  #cat("\\begin{center}")
+  addtorow          <- list()
+addtorow$pos      <- list()
+addtorow$pos[[1]] <- c(0)
+addtorow$command  <- c(paste("\\hline \n",
+                             "\\endhead \n",
+                             "\\hline \n",
+                             "{\\footnotesize Continued on next page} \n",
+                             "\\endfoot \n",
+                             "\\endlastfoot \n",sep=""))
+  print(tableTemp, caption.placement = getOption("xtable.caption.placement", "bottom"), tabular.environment = 'longtable', floating = TRUE, include.rownames=FALSE, hline.after=c(-1, 0), add.to.row = addtorow)
+  #cat("\\end{center}")
+  #cat("}")
+  #tableTemp = pandoc.table(geneSigFrame[,1:2], digits = 5, caption = tableCap, align = 'c', style = 'rmarkdown')
+  #print(tableTemp, tabular.environment = 'longtable')
+  cat("\\clearpage") 
+  
+    beginInf = 3
+    #remove na rows present because no genes in the signature were in the data set
+    noGenesInd = which(forestPlotFrame$numGenesPresent == 0)
+    forestPlotFrameNotFixed = forestPlotFrame
+    if(length(noGenesInd) > 0)
+        forestPlotFrame = forestPlotFrame[-noGenesInd, ]
+
+    forestPlotFrameOrig = forestPlotFrame
+    for(k in 1:(numSubtypes + 1))
+    {
+      forestPlotFrame = forestPlotFrameOrig
+      if(k == 1)
+        cat("\\subsection{Gene Signature Prognostics on All Patients}")
+      if(k > 1)
+        cat("\\subsection{Gene Signature Prognostics on",subtypes[k-1], "Patients}")
+      
+      geneSigInfInd = numExtras + 1 + infoPerSubtype*(k - 1)
+      #if(!identical(geneInfoList[[geneInfInd]], "empty"))
+      #{
+        #if(k == 1)
+        #{
+          an <- paste("sigAllPlotIns",k ,".pdf", sep = "")
+          aname = paste("sigAllPlotIns",k, sep = "")
+          pdf(an)
+        if(k == 1)
+          titleStr = paste("Survival Curve \nUsing All the Patients")
+        
+        #}
+        if(k > 1)
+          titleStr = paste("Survival Curve \nUsing", subtypes[k-1], "Patients")
+
+        naVec = c()
+        dInds = forestPlotFrameOrig[,beginInf + k]
+        dIndsLow = forestPlotFrameOrig[, beginInf + 1 + 1*(numSubtypes + 1) + (k - 1)]
+        dIndsHigh = forestPlotFrameOrig[, beginInf + 1 + 2*(numSubtypes + 1) + (k - 1)]
+        dIndsSe = log(dIndsHigh/dInds)/qnorm(.05, lower.tail = FALSE)
+        tabText = forestPlotFrameOrig[, c(1:beginInf, dim(forestPlotFrameOrig)[2])]
+        colnames(tabText) = c("Data Set", "Pub Med ID", "Number of Patients","Genes Present from Signature")
+        naInds = unique(c(which(is.na(dInds)), which(is.na(dIndsLow)), which(is.na(dIndsHigh))))
+        if(length(naInds) > 0)
+        {
+          #when too few samples in calculation coxph does not converge and D.index gives Na (see note above)
+          dInds = dInds[-naInds]
+          dIndsLow = dIndsLow[-naInds]
+          dIndsHigh = dIndsHigh[-naInds]
+          dIndsSe = dIndsSe[-naInds]
+          tabText = tabText[-naInds, ]
+        }
+        #shift numsubtypes + 1 (+ 1 cz of the all data case) in order to move from dInds to lower          bond of dInds
+        #dIndsLow = forestPlotFrame[, beginInf + 1 + 1*(numSubtypes + 1) + (k - 1)]
+        #dIndsHigh = forestPlotFrame[, beginInf + 1 + 2*(numSubtypes + 1) + (k - 1)]
+        #dIndsSe = log(dIndsHigh/dInds)/qnorm(.05, lower.tail = FALSE)
+
+        dindComb = combine.est(dInds, dIndsSe)
+        dindStrSig = as.character(format(dindComb$estimate, digits = 2))
+          
+        makeSurvPlot(geneSigInfoList[[geneSigInfInd]], geneSigInfoList[[geneSigInfInd + 1]], geneSigInfoList[[geneSigInfInd + 2]], FALSE, dindStr = dindStrSig, titleStr)
+        #if(k == 1)
+        #{
+        #  cat(paste("\\includegraphics[bb = 120 158 233 482, scale = .8]{{", aname, "}.pdf}", sep = ""))
+        #  dev.off()
+        #  cat("\\clearpage")
+        #  #adjust below line eventually to account for subtypes number < 4 or > 4 --> layout function 
+        #  fn <- "survSigPlotIns.pdf"
+        #  fname = "survSigPlotIns"
+        #  #if (file.exists(fn)) file.remove(fn)
+        #  pdf(fn)
+        #  par(mar=c(4, .5, 1, 1))
+        #  par(mfrow=c(2,2))
+        #}
+        #if(k == (numSubtypes+1))
+        #  makeSurvPlot(geneInfoList[[geneInfInd]], geneInfoList[[geneInfInd + 1]], geneInfoList[[geneInfInd + 2]], FALSE, titleStr)
+        
+      #}
+        #if(!is.null(dev.list()))
+          dev.off()
+        cat(paste("\\includegraphics[bb = 80 158 233 482, scale = 1]{{", aname, "}.pdf}", sep = ""))
+        cat("\\clearpage")
+        
+        if(nrow(forestPlotFrame) > 1)
+        {
+           an <- paste("sigForPlotIns", k, ".pdf", sep = "")
+          aname = paste("sigForPlotIns", k, sep = "")
+          #dev.new( width=4, height=6 )
+          #below dimensions fill whole page
+          #pdf(file = an, width = 14, height = 38)
+          #onefile = FALSE prevents first page from being blank
+          pdf(file = an, width = 14, height = 15, onefile = FALSE)
+          
+          if(k == 1)
+            cat("\\subsection{Forest Plot For D Indices when using All Patients}")
+          if(k > 1)
+            cat("\\subsection{Forest Plot For D Indices when using", subtypes[k-1]," Patients}")
+          
+        #dInds = forestPlotFrame[,beginInf + k]
+        #shift numsubtypes + 1 (+ 1 cz of the all data case) in order to move from dInds to lower bond of dInds
+        #dIndsLow = forestPlotFrame[, beginInf + 1 + 1*(numSubtypes + 1) + (k - 1)]
+        #dIndsHigh = forestPlotFrame[, beginInf + 1 + 2*(numSubtypes + 1) + (k - 1)]
+        #tabText = forestPlotFrame[, c(1:beginInf, dim(forestPlotFrame)[2])]
+        #colnames(tabText) = c("Data Set", "Pub Med ID", "Number of Patients","Genes Present from Signature")
+
+        if(k == 1)
+          xTickVec = c(0,.5,1,1.5,2)
+        if(k > 1)
+          xtickVec = c(0, .5, 1, 1.5, 2,2.5,3,3.5,4,4.5,5)
+        
+        #cat("\\subsection{", titleStr ,"}")
+          
+        plotInfo = createForestPlot(dInds, dIndsLow, dIndsHigh, tabText)
+        forestplot(plotInfo[[1]], plotInfo[[2]], is.summary=c(TRUE,rep(FALSE,length(dInds)),TRUE), col=fpColors(box="royalblue",line="darkblue", summary="royalblue"), clip=c(0.1,2.5), line.margin = .15, boxsize = 0.25, cex = 1.5, txt_gp = fpTxtGp(label = list(ticks = gpar(fontfamily = "", cex=1.5))), lineheight = unit(2, "cm"), xlab="D index", zero = 1, xticks = xTickVec)
+        #grid.text(titleStr, .5,.95, gp=gpar(cex=2.5, fontface = "bold"))
+        #grid.text(titleStr, gp=gpar(cex=2.5, fontface = "bold"))
+        
+          cat(paste("\\includegraphics[bb = 120 158 433 1112, scale = .55]{{", aname, "}.pdf}", sep = ""))
+          #if(!is.null(dev.list()))
+            dev.off()
+          cat("\\clearpage")
+
+        }
+    }
+    #dev.off()
+    #below line adds other plot from environment as well for whatever reason
+    #cat(paste("\\includegraphics[bb = 80 158 233 482, scale = 1]{{", fname, "}.pdf}", sep = ""))
+    #unlink(fn)
+    cat("\\clearpage") 
+}
+
+cat("\\vbox{ }")
+cat("\\section{Summary of Gene Survival Curve Statistics}") 
+cat("\\vbox{The tables are organized by the log rank p values of the genes}")
+
+for(i in 1:(numSubtypes + 1))
+{
+  cat("\\vbox{ }")
+  if(i == 1)
+  {
+    cat("\\subsection{Survival Curve Statistics When Using All Data}")  
+    tableCap = "Prognostic Value of the Genes on the Patients"
+  }
+  if(i > 1)
+  {
+    cat(paste("\\subsection{Survival Curve Statistics When Using",subtypes[i-1], "Subtype Patients}"))
+    tableCap = paste("Prognostic Value of the Genes on the", subtypes[i-1], "Subtype Patients")
+  }
+  
+  summaryTabList[[i]][, "Log Rank Test P"] = replace(as.character(summaryTabList[[i]][, "Log Rank Test P"]), as.character(summaryTabList[[i]][, "Log Rank Test P"]) == "0e+00", "1e-16")
+    summaryTabList[[i]][, "Log Rank FDR"] = replace(as.character(summaryTabList[[i]][, "Log Rank FDR"]), as.character(summaryTabList[[i]][, "Log Rank FDR"]) == "0.0e+00", "1e-16")
+  summaryTabList[[i]][, "Log Rank Test P"] = replace(as.character(summaryTabList[[i]][, "Log Rank Test P"]), as.character(summaryTabList[[i]][, "Log Rank Test P"]) == "0.0e+00", "1e-16")
+    summaryTabList[[i]][, "Log Rank FDR"] = replace(as.character(summaryTabList[[i]][, "Log Rank FDR"]), as.character(summaryTabList[[i]][, "Log Rank FDR"]) == "0e+00", "1e-16")
+  
+    
+  sortInd = order(as.numeric(as.character(summaryTabList[[i]][, "Log Rank Test P"])))
+  tableTemp = xtable::xtable(summaryTabList[[i]][sortInd, ], digits = 5, caption = tableCap)
+  print(tableTemp, caption.placement = getOption("xtable.caption.placement", "bottom"), tabular.environment = 'longtable')
+  cat("\\makebox[\\textwidth]{")
+  #print(tableTemp, floating = FALSE)
+  cat("}")
+  cat("\\clearpage") 
+}
+
+iEnd = length(geneEntrezList)
+#iEnd = 1
+
+
+#geneInfoList = list()
+if(mord == FALSE)
+  setwd("C://Users//micha//Documents//PMH Research//Yale Alberto Meta Analysis//ProjectTest//Sweave Project")
+#setwd("C://Users//Michael//Documents//PMH Research//Yale Alberto Meta Analysis//ProjectTest//Sweave Project")
+listPos = 0;
+geneSymbShift = 0
+
+for(i in 1:iEnd)
+{
+  pathwayName = symbPathList[[2]][i]
+  if(!(neel == FALSE))
+    pathwayName = "Individual Gene Survival Analysis"
+  cat(paste("\\section{",pathwayName,"}", sep="")) 
+
+  #jEnd = 3
+  #for(j in 1:length(geneEntrezList[[i]]))
+  jEnd = length(geneEntrezList[[i]])
+  #jEnd = 2
+  for(j in 1:jEnd)
+  {
+    #print(i)
+    #print(j)
+    shift = geneShift*listPos
+    
+    geneSymb = symbPathList[[5]][[i]][j]
+    #geneSymb = geneNameList[[i]][j]
+    
+    #cat("\\subsection{",geneNameList[[i]][j],"}")
+    #cat("\\vbox{Gene Description:",geneDescripList[[i]][j],"}") 
+    cat("\\subsection{",symbPathList[[3]][[i]][j],"}")
+    if(length(statTableList[[geneSymbShift + j]]) == 0)
+    {
+      cat("\\vbox{Gene not present in the expression data of the external data sets}")
+    }else if(!(length(statTableList[[geneSymbShift + j]]) == 0)){
+      cat("\\vbox{Gene Description:",symbPathList[[4]][[i]][j],"}")
+    }
+
+    #if(length(statTableList[[geneSymbShift + j]]) == 0)
+    #  cat("\\vbox{Gene not present in the expression data of the external data sets}")
+    
+    if(length(statTableList[[geneSymbShift + j]]) > 0)
+    {
+      statTableList[[geneSymbShift + j]][, "Log Rank Test P"] = replace(as.character(statTableList[[geneSymbShift + j]][, "Log Rank Test P"]), as.character(statTableList[[geneSymbShift + j]][, "Log Rank Test P"]) == "0e+00", "1e-16")
+      statTableList[[geneSymbShift + j]][, "Log Rank Test P"] = replace(as.character(statTableList[[geneSymbShift + j]][, "Log Rank Test P"]), as.character(statTableList[[geneSymbShift + j]][, "Log Rank Test P"]) == "0.0e+00", "1e-16")
+    
+  
+      print(xtable::xtable(statTableList[[geneSymbShift + j]], digits = 5, caption = paste("survival statistics summary for gene ", geneSymb), tabular.environment = 'longtable'), scalebox = 1.25)
+    }
+    
+if(length(statTableList[[geneSymbShift + j]]) > 0)
+{
+    for(k in 1:(numSubtypes + 1))
+    {
+      
+      geneInfInd = numExtras + 1 + infoPerSubtype*(k - 1) + shift
+      if(!identical(geneInfoList[[geneInfInd]], "empty"))
+      {
+        if(k == 1)
+        {
+          an <- paste("allPlotIns",i*jEnd+j, ".pdf", sep = "")
+          aname = paste("allPlotIns",i*jEnd+j, sep = "")
+          pdf(an)
+          titleStr = paste("Survival Curve \nUsing All the Data for Gene Symbol ", geneSymb)
+        
+        }
+        if(k > 1)
+          titleStr = paste(subtypes[k-1] ,"Patients")
+        xLoc = 2
+        if(k > 1)
+          xLoc = 3.5
+
+        makeSurvPlot(geneInfoList[[geneInfInd]], geneInfoList[[geneInfInd + 1]], geneInfoList[[geneInfInd + 2]], FALSE, dindStr = as.vector(statTableList[[geneSymbShift + j]][[1]])[k], titleStr, xLoc = xLoc)
+        if(k == 1)
+        {
+          cat(paste("\\includegraphics[bb = 40 158 233 482, scale = .8]{{", aname, "}.pdf}", sep = ""))
+          #if(!is.null(dev.list()))
+            dev.off()
+          cat("\\clearpage")
+          #adjust below line eventually to account for subtypes number < 4 or > 4 --> layout function 
+          fn <- paste("survPlotIns",i*jEnd+j, ".pdf", sep = "")
+          fname = paste("survPlotIns",i*jEnd+j, sep = "")
+          #if (file.exists(fn)) file.remove(fn)
+          pdf(fn)
+          par(mar=c(4, .5, 1, 1))
+          par(mfrow=c(2,2))
+        }
+        #if(k == (numSubtypes+1))
+        #  makeSurvPlot(geneInfoList[[geneInfInd]], geneInfoList[[geneInfInd + 1]], geneInfoList[[geneInfInd + 2]], FALSE, titleStr)
+        
+      }
+    }
+    #if(!is.null(dev.list()))
+      dev.off()
+    cat(paste("\\includegraphics[bb = 40 158 233 482, scale = 1]{{", fname, "}.pdf}", sep = ""))
+    #unlink(fn)
+}    
+    listPos = listPos + 1
+    cat("\\clearpage") 
+
+  }
+  geneSymbShift = geneSymbShift + jEnd
+  cat("\\clearpage") 
+}
+
+#setwd("C:\\Users\\micha\\Documents\\PMH Research\\R Code General")
+#source("knit2pdfCustom.R")
+#setwd("C://Users//micha//Documents//PMH Research//Yale Alberto Meta Analysis//ProjectTest//Sweave Project")
+#knit2pdf("getOvarianGenePrognosisReport.Rnw")
+@
+
+
+\end{document}
